@@ -117,6 +117,13 @@ async function request<T>(
 }
 
 export const api = {
+  assistant: {
+    chat: (message: string, history: { role: 'user' | 'assistant'; content: string }[]) =>
+      request<{ answer: string; data?: Record<string, unknown> | null; navigate_to?: string | null }>('/assistant/chat', {
+        method: 'POST',
+        body: JSON.stringify({ message, history }),
+      }),
+  },
   auth: {
     login: (email: string, password: string) =>
       request<{ access_token: string; refresh_token: string }>('/auth/login', {

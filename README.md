@@ -34,6 +34,8 @@ python -m scripts.seed
 uvicorn app.main:app --reload --port 8000
 ```
 
+To populate the full demo warehouse workflow, run `python scripts/seed_demo.py` from `backend`. The seeder is idempotent and works with SQLite or Supabase. For Supabase, copy the exact **Transaction pooler** connection string from Supabase Dashboard > Connect into `backend/.env` as `SUPABASE_DATABASE_URL` first, then run the same command. The direct `db.<project-ref>.supabase.co` host is not reachable in some Windows networks; do not use the placeholder URL from `.env.example`.
+
 ### 3. Frontend
 
 ```bash

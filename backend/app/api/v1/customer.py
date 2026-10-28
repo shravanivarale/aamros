@@ -79,7 +79,7 @@ async def list_orders(
     current_user: Annotated[User, Depends(get_current_user)],
 ):
     service = OrderService(db)
-    customer_id = None if current_user.role == UserRole.ADMINISTRATOR.value else current_user.id
+    customer_id = None if current_user.role in {UserRole.ADMINISTRATOR.value, UserRole.WAREHOUSE_OPERATOR.value} else current_user.id
     try:
         return await service.list_orders(customer_id)
     except SQLAlchemyError:

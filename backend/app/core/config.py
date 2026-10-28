@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     supabase_url: Optional[str] = None
     supabase_key: Optional[str] = None
     firebase_project_id: Optional[str] = None
+    groq_api_key: Optional[str] = None
+    groq_model: str = "openai/gpt-oss-20b"
     redis_url: str = "redis://localhost:6379/0"
 
     secret_key: str = "robu-production-secure-jwt-secret-key-32-chars-long"
@@ -47,6 +49,10 @@ class Settings(BaseSettings):
             or self.supabase_database_url
             or self.database_url
         )
+
+        # A copied .env.example must not make local development wait on a fake remote database.
+        if "YOUR_PROJECT_REF" in raw_url or "YOUR_DB_PASSWORD" in raw_url:
+            raw_url = self.database_url
 
         # Normalize postgres driver for SQLAlchemy asyncpg
         if raw_url.startswith("postgres://"):

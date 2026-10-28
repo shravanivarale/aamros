@@ -6,6 +6,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
 import { MetricCard, Skeleton, StatusBadge, DataTable, Card, PageHeader, ErrorState, Notice, type Column } from '../../components/ui'
 import type { Robot } from '../../types'
+import { AssistantPanel } from './AssistantPanel'
 
 export function DashboardPage() {
   const role = useAuthStore((s) => s.user?.role)
@@ -71,6 +72,19 @@ export function DashboardPage() {
           Counts above may be incomplete. Check your connection or permissions and refresh.
         </Notice>
       )}
+
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+        <AssistantPanel />
+        <Card className="lg:col-span-1">
+          <h2 className="t-section-title mb-2">Start with a question</h2>
+          <p className="text-sm leading-6 text-text-secondary">You do not need to know the menu structure. Ask for a status, a list, or a page and the assistant will use the access you already have.</p>
+          <div className="mt-5 space-y-3 text-xs text-text-secondary">
+            <p><span className="font-semibold text-text-primary">Check:</span> “What is happening with my orders?”</p>
+            <p><span className="font-semibold text-text-primary">Find:</span> “Show products in the catalog”</p>
+            <p><span className="font-semibold text-text-primary">Open:</span> “Take me to robot fleet”</p>
+          </div>
+        </Card>
+      </div>
 
       {isStaff && (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
