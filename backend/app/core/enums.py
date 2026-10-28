@@ -11,6 +11,7 @@ class UserRole(str, Enum):
 class RobotStatus(str, Enum):
     IDLE = "idle"
     BUSY = "busy"
+    NAVIGATING = "navigating"
     CHARGING = "charging"
     OFFLINE = "offline"
     ERROR = "error"
@@ -43,6 +44,7 @@ class OrderStatus(str, Enum):
     RETRIEVING = "retrieving"
     READY = "ready"
     COMPLETED = "completed"
+    DELIVERED = "delivered"
     CANCELLED = "cancelled"
 
 

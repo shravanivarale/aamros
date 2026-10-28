@@ -6,7 +6,7 @@ import { useAuthStore } from '../../stores/authStore'
 import { Button, Input } from '../../components/ui'
 import logoSrc from '../../assets/logo.png'
 
-// Seeded development accounts (see backend/scripts/seed*.py). Shown only in dev builds.
+// Seeded development accounts (see backend/app/main.py auto-seed). Shown only in dev builds.
 const demoAccounts = [
   { email: 'admin@arms.io', password: 'admin12345', role: 'Admin' },
   { email: 'operator@arms.io', password: 'operator123', role: 'Operator' },
@@ -54,42 +54,42 @@ export function LoginPage() {
           <p className="mt-1.5 text-sm text-text-secondary">Autonomous Robotic Management System</p>
         </div>
 
-        <form onSubmit={handleSubmit} className="neu-float space-y-5 p-6 sm:p-8" noValidate={false}>
+        <div className="neu-float space-y-5 p-6 sm:p-8">
           {error && (
             <div role="alert" className="neu-inset flex items-center gap-2 px-4 py-3 text-sm text-error">
               <AlertCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-              {error}
+              <span>{error}</span>
             </div>
           )}
 
-          <Input label="Email address" type="email" autoComplete="username" value={email} onChange={setEmail} placeholder="you@company.com" required />
-          <Input label="Password" type="password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="Enter your password" required />
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate={false}>
+            <Input label="Email address" type="email" autoComplete="username" value={email} onChange={setEmail} placeholder="you@company.com" required />
+            <Input label="Password" type="password" autoComplete="current-password" value={password} onChange={setPassword} placeholder="Enter your password" required />
 
-          <Button type="submit" loading={isLoading} className="w-full py-3">
-            {isLoading ? 'Signing in…' : 'Sign in'}
-          </Button>
+            <Button type="submit" loading={isLoading} className="w-full py-3">
+              {isLoading ? 'Signing in…' : 'Sign in'}
+            </Button>
+          </form>
 
-          {import.meta.env.DEV && (
-            <div className="pt-2">
-              <p className="t-caption mb-2.5 text-center">Development accounts · click to fill</p>
-              <div className="grid grid-cols-3 gap-3">
-                {demoAccounts.map((account) => (
-                  <button
-                    key={account.role}
-                    type="button"
-                    onClick={() => {
-                      setEmail(account.email)
-                      setPassword(account.password)
-                    }}
-                    className="neu-pressable min-h-10 cursor-pointer rounded-[var(--radius-neu-sm)] px-2 text-xs font-semibold text-text-secondary hover:text-text-primary"
-                  >
-                    {account.role}
-                  </button>
-                ))}
-              </div>
+          <div className="pt-2">
+            <p className="t-caption mb-2.5 text-center">Development accounts · click to fill</p>
+            <div className="grid grid-cols-3 gap-3">
+              {demoAccounts.map((account) => (
+                <button
+                  key={account.role}
+                  type="button"
+                  onClick={() => {
+                    setEmail(account.email)
+                    setPassword(account.password)
+                  }}
+                  className="neu-pressable min-h-10 cursor-pointer rounded-[var(--radius-neu-sm)] px-2 text-xs font-semibold text-text-secondary hover:text-text-primary"
+                >
+                  {account.role}
+                </button>
+              ))}
             </div>
-          )}
-        </form>
+          </div>
+        </div>
       </motion.main>
     </div>
   )

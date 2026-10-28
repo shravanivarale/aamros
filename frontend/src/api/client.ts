@@ -131,6 +131,11 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ refresh_token }),
       }),
+    firebaseLogin: (id_token: string) =>
+      request<{ access_token: string; refresh_token: string }>('/auth/firebase-login', {
+        method: 'POST',
+        body: JSON.stringify({ id_token }),
+      }),
   },
   products: {
     list: () => request<import('../types').Product[]>('/products'),
@@ -199,6 +204,27 @@ export const api = {
     optimize: () => request<{ status: string; recommendations_generated: number }>('/slotting/optimize', { method: 'POST' }),
     recommendations: () => request<{ id: string; product_id: string; slot_id: string; priority_score: number; slot_score: number; reason: string }[]>('/slotting/recommendations'),
     reslot: () => request<{ status: string; tasks_generated: number }>('/slotting/reslot', { method: 'POST' }),
+    history: () => request<{ id: string; created_at: string; status: string; algorithm: string; recommendations_count: number; travel_reduction_pct: number; relocation_tasks: number; runtime_ms: number }[]>('/slotting/history'),
+  },
+  categories: {
+    list: () => request<{ id: string; name: string; description?: string }[]>('/categories'),
+  },
+  stockMovements: {
+    list: () => request<{ id: string; sku: string; product_name: string; movement_type: string; quantity: number; source_location: string; destination_location: string; robot_name: string; timestamp: string; status: string }[]>('/stock-movements'),
+  },
+  users: {
+    list: () => request<import('../types').User[]>('/admin/users'),
+    update: (id: string, data: Partial<import('../types').User>) =>
+      request<import('../types').User>(`/admin/users/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      }),
+    delete: (id: string) =>
+      request<{ status: string; message: string }>(`/admin/users/${id}`, { method: 'DELETE' }),
+  },
+  admin: {
+    stats: () => request<{ total_users: number; total_products: number; total_orders: number; total_shipments: number; total_robots: number; active_robots: number }>('/admin/stats'),
+    settings: () => request<{ app_name: string; app_version: string; environment: string; database_provider: string; supabase_configured: boolean; firebase_auth_enabled: boolean }>('/admin/settings'),
   },
   robotCommunication: {
     submitTask: (data: { task_type?: string; source_location_id: string; destination_location_id: string; priority?: number; robot_id?: string }) =>

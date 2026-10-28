@@ -10,5 +10,8 @@
     "build": "npm --prefix frontend run build",
     "install:frontend": "npm --prefix frontend install",
     "vercel-build": "npm --prefix frontend install && npm --prefix frontend run build"
+  },
+  "dependencies": {
+    "@supabase/server": "^1.9.2"
   }
 }

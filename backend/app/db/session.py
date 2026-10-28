@@ -1,15 +1,43 @@
 from collections.abc import AsyncGenerator
+from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.core.config import get_settings
 
 settings = get_settings()
+db_url = settings.effective_database_url
+
+import os
+from sqlalchemy.pool import NullPool
+
+connect_args: dict[str, Any] = {}
+extra_engine_kwargs: dict[str, Any] = {}
+
+if "sqlite" in db_url:
+    connect_args["check_same_thread"] = False
+elif "asyncpg" in db_url:
+    # Supabase connections require SSL
+    if "supabase" in db_url or "pooler" in db_url or "aws-" in db_url or not db_url.startswith("postgresql+asyncpg://robu:"):
+        connect_args["ssl"] = True
+        # Supabase Transaction Pooler (port 6543) requires statement caching disabled
+        connect_args["statement_cache_size"] = 0
+        connect_args["prepared_statement_cache_size"] = 0
+
+    # In serverless environments (e.g. Vercel) or when using Supabase pooler,
+    # use NullPool to let Supavisor handle pooling without exhausting connections.
+    if os.environ.get("VERCEL") or "pooler.supabase" in db_url or ":6543" in db_url:
+        extra_engine_kwargs["poolclass"] = NullPool
+    else:
+        extra_engine_kwargs["pool_size"] = 5
+        extra_engine_kwargs["max_overflow"] = 5
 
 engine = create_async_engine(
-    settings.database_url,
-    echo=settings.is_development,
+    db_url,
+    echo=False,
     pool_pre_ping=True,
+    connect_args=connect_args,
+    **extra_engine_kwargs,
 )
 
 AsyncSessionLocal = async_sessionmaker(
@@ -29,3 +57,4 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         except Exception:
             await session.rollback()
             raise
+

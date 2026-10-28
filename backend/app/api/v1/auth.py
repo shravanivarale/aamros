@@ -1,10 +1,11 @@
 from typing import Annotated
+from pydantic import BaseModel
 
 from fastapi import APIRouter, Depends, HTTPException, status
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.core.deps import get_current_user, require_roles
-from app.core.enums import UserRole
+from app.core.deps import get_current_user
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.auth import LoginRequest, TokenRefreshRequest, TokenResponse, UserCreate, UserResponse
@@ -35,3 +36,4 @@ async def refresh_token(data: TokenRefreshRequest, db: Annotated[AsyncSession, D
 async def get_me(current_user: Annotated[User, Depends(get_current_user)], db: Annotated[AsyncSession, Depends(get_db)]):
     service = AuthService(db)
     return await service.get_me(current_user.id)
+

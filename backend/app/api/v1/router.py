@@ -12,6 +12,7 @@ api_router.include_router(warehouse.router)
 api_router.include_router(admin.router)
 api_router.include_router(robots.router)
 api_router.include_router(map.router)
+api_router.add_api_route("/stock-movements", warehouse.list_stock_movements, methods=["GET"], tags=["Warehouse Intake"])
 # Slotting endpoints read/write warehouse placement data: staff only.
 api_router.include_router(
     slotting.router,
@@ -20,3 +21,4 @@ api_router.include_router(
     dependencies=[Depends(require_roles(UserRole.ADMINISTRATOR, UserRole.WAREHOUSE_OPERATOR))],
 )
 api_router.include_router(robot_communication.router)
+
