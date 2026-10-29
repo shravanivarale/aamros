@@ -46,6 +46,23 @@ npm run dev
 
 Open http://localhost:5174
 
+## Production Deployment
+
+Deploy the frontend and backend as separate services:
+
+1. **Railway backend:** create a Railway project from this repository and set the service root directory to `backend`. Add a PostgreSQL
+	service, generate a public domain, and configure `ENVIRONMENT=production`, `DATABASE_URL=${{Postgres.DATABASE_URL}}`, a generated
+	`SECRET_KEY`, `ADMIN_EMAIL`, `ADMIN_PASSWORD`, and `CORS_ORIGINS` set to the exact Vercel origin. Add `GROQ_API_KEY`,
+	`FIREBASE_PROJECT_ID`, and robot bridge variables only when those features are used. Keep one replica. See [RAILWAY.md](RAILWAY.md).
+2. **Vercel frontend:** create a Vercel project from the same repository. Either set the root directory to `frontend` or leave the root at
+	the repository root; both configurations are included. Set the build-time variable `VITE_API_BASE_URL` to the Railway public URL,
+	without a trailing slash, then redeploy.
+3. **Verify:** open `https://<railway-domain>/health`, then log in through the Vercel URL. Browser requests should use the Railway URL and
+	the live connection should use `wss://<railway-domain>/ws`.
+
+Never put backend secrets such as `SECRET_KEY`, database URLs, or `GROQ_API_KEY` in Vercel variables or frontend files. Rotate any
+credentials that have been exposed outside the secret manager.
+
 ### Demo Accounts
 
 | Role       | Email               | Password      |

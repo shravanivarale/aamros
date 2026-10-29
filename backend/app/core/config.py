@@ -55,7 +55,7 @@ class Settings(BaseSettings):
     database_ssl: str = "auto"
 
     environment: str = "development"
-    cors_origins: str = "http://localhost:5174,http://localhost:5173,http://localhost:3000,*"
+    cors_origins: str = "http://localhost:5174,http://localhost:5173,http://localhost:3000"
 
     @property
     def effective_database_url(self) -> str:
@@ -132,6 +132,8 @@ class Settings(BaseSettings):
                             "Add a PostgreSQL database and set DATABASE_URL.")
         if self.seed_demo:
             problems.append("SEED_DEMO_DATA is on: demo accounts with published passwords would be created.")
+        if "*" in self.cors_origins_list:
+            problems.append("CORS_ORIGINS contains '*': configure the exact Vercel origin before exposing the API publicly.")
         return problems
 
 
