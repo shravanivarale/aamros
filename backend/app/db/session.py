@@ -24,11 +24,19 @@ elif "asyncpg" in db_url:
     if mode == "auto":
         if host in ("localhost", "127.0.0.1", "::1") or host.endswith(".railway.internal") or db_url.startswith("postgresql+asyncpg://robu:"):
             mode = "disable"
+        elif host.endswith((".supabase.co", ".supabase.com")):
+            mode = "supabase-ca"                           # full verification against Supabase's own root CA (bundled)
         elif host.endswith(".rlwy.net") or host.endswith(".railway.app"):
-            mode = "require"                               # Railway public proxy: encrypted, certificate not verifiable
+            mode = "require"                               # Railway public proxy: encrypted, certificate not verifiable (prefer the private network)
         else:
-            mode = "verify-full"                           # Supabase etc.: asyncpg ssl=True == verify-full (the previous behaviour)
-    if mode != "disable":
+            mode = "verify-full"                           # other remote databases with a publicly trusted certificate
+    if mode == "supabase-ca":
+        import ssl as _ssl
+
+        # Supabase's chain ends in its own private root, which Python's default trust store lacks (asyncpg ssl=True fails with
+        # "self-signed certificate in certificate chain"). Verify against that root instead: chain AND hostname are still checked.
+        connect_args["ssl"] = _ssl.create_default_context(cafile=os.path.join(os.path.dirname(__file__), "certs", "supabase-prod-ca-2021.crt"))
+    elif mode != "disable":
         connect_args["ssl"] = True if mode == "verify-full" else mode
     # Supabase Transaction Pooler (port 6543) requires statement caching disabled
     if "supabase" in db_url or "pooler" in db_url or ":6543" in db_url:
