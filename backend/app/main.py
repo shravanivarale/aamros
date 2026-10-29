@@ -1,4 +1,5 @@
 import logging
+import os
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -8,9 +9,8 @@ from app.api.v1.router import api_router
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.core.middleware import ErrorLoggingMiddleware
-from app.db.base import Base
+from app.db.bootstrap import init_schema, seed
 import app.models  # noqa: F401
-from sqlalchemy import text
 from app.db.session import engine
 from app.websocket.gateway import websocket_endpoint
 
@@ -34,76 +34,32 @@ async def lifespan(app: FastAPI):
         settings.environment,
     )
 
+    serverless = bool(os.environ.get("VERCEL"))     # legacy Vercel function: stateless, no background loops
+    if settings.is_production:
+        problems = settings.check_production()
+        if problems and serverless:
+            # do not take a running site down; the Railway deployment enforces these strictly
+            for msg in problems:
+                logger.error("INSECURE CONFIGURATION (serverless, continuing): %s", msg)
+        elif problems:
+            for msg in problems:
+                logger.error("Refusing to start: %s", msg)
+            raise RuntimeError("Unsafe production configuration: " + " | ".join(problems))
     try:
-        async with engine.begin() as conn:
-            await conn.run_sync(Base.metadata.create_all)
-            try:
-                await conn.execute(text("ALTER TABLE robots ADD COLUMN ip_address VARCHAR(50) DEFAULT '192.168.1.12'"))
-            except Exception:
-                pass
-        logger.info("Database tables verified / created")
-
-        # Auto-seed initial demo accounts and warehouse catalog if users table is empty
-        try:
-            from app.db.session import AsyncSessionLocal
-            from app.models.user import User
-            from app.models.warehouse import Product, ProductCategory, WarehouseZone
-            from app.models.robot import Robot, RobotHealth
-            from app.models.inventory import InventoryItem
-            from app.core.security import get_password_hash
-            from app.core.enums import UserRole
-            from sqlalchemy import select
-
-            async with AsyncSessionLocal() as db:
-                user_check = await db.execute(select(User).limit(1))
-                if not user_check.scalar_one_or_none():
-                    logger.info("New database detected — auto-seeding demo users and catalog...")
-                    users_to_seed = [
-                        ("admin@arms.io", "admin12345", "ARMS System Administrator", UserRole.ADMINISTRATOR.value),
-                        ("operator@arms.io", "operator123", "ARMS Fleet Operator", UserRole.WAREHOUSE_OPERATOR.value),
-                        ("customer@arms.io", "customer123", "ARMS Demo Customer", UserRole.CUSTOMER.value),
-                        ("admin@robu.io", "admin12345", "System Administrator", UserRole.ADMINISTRATOR.value),
-                        ("operator@robu.io", "operator123", "Warehouse Operator", UserRole.WAREHOUSE_OPERATOR.value),
-                        ("customer@robu.io", "customer123", "Demo Customer", UserRole.CUSTOMER.value),
-                    ]
-                    for email, pwd, name, role in users_to_seed:
-                        db.add(User(
-                            email=email,
-                            hashed_password=get_password_hash(pwd),
-                            full_name=name,
-                            role=role,
-                        ))
-                    await db.commit()
-
-                    cat = ProductCategory(name="Electronics", description="Electronic components and devices")
-                    db.add(cat)
-                    await db.flush()
-
-                    products = [
-                        Product(sku="SKU-001", name="Microcontroller Board", category_id=cat.id, unit_price=29.99),
-                        Product(sku="SKU-002", name="Sensor Module Kit", category_id=cat.id, unit_price=49.99),
-                        Product(sku="SKU-003", name="Motor Driver Unit", category_id=cat.id, unit_price=79.99),
-                    ]
-                    db.add_all(products)
-                    await db.flush()
-
-                    db.add_all([InventoryItem(product_id=p.id, quantity=100, reserved_quantity=0) for p in products])
-
-                    robot = Robot(name="AMR-Alpha", serial_number="ROBU-001", status="idle", battery_level=95.0, ip_address="192.168.1.12")
-                    db.add(robot)
-                    await db.flush()
-                    db.add(RobotHealth(robot_id=robot.id, connectivity="online"))
-
-                    await db.commit()
-                    logger.info("Demo catalog and accounts seeded successfully.")
-        except Exception as seed_err:
-            logger.debug("Auto-seed check: %s", seed_err)
-
+        await init_schema()
+        await seed(settings)
     except Exception as exc:
+        if settings.is_production and not serverless:
+            raise                                   # a production server without its database must fail its health check, not limp on
         logger.warning("Could not auto-verify database on startup: %s", exc)
+
+    from app.services.robot_sync import robot_sync
+    if not serverless:                              # the robot-sync loop needs a long-lived process (Railway), not a function
+        await robot_sync.start()
 
     yield
 
+    await robot_sync.stop()
     await engine.dispose()
     logger.info("Application shutdown complete")
 

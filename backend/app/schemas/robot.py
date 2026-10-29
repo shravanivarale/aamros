@@ -17,6 +17,12 @@ class RobotResponse(BaseModel):
     current_task_id: Optional[str] = None
     position_x: Optional[float] = None
     position_y: Optional[float] = None
+    position_z: Optional[float] = None
+    orientation_z: Optional[float] = None
+    orientation_w: Optional[float] = None
+    linear_velocity: Optional[float] = None
+    angular_velocity: Optional[float] = None
+    last_odom_at: Optional[datetime] = None
     is_enabled: bool
     created_at: datetime
 

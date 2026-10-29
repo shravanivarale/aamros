@@ -3,7 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Map, Upload, CheckCircle2, FileCode, Image as ImageIcon, X } from 'lucide-react'
 import { api } from '../../api/client'
 import { Card, LoadingSpinner, Button, Modal, Input } from '../../components/ui'
-import { drawMapToCanvas } from '../../utils/mapRenderer'
+import { LiveMap, type PickedPose } from '../../components/map/LiveMap'
+import { LocationsPanel } from '../../components/map/LocationsPanel'
+import { useLiveStore } from '../../stores/liveStore'
 
 export function WarehouseMapPage() {
   const queryClient = useQueryClient()
@@ -19,6 +21,12 @@ export function WarehouseMapPage() {
   const [pgmData, setPgmData] = useState<string>('')
   const [selectedFileName, setSelectedFileName] = useState<string>('')
   const [isDragging, setIsDragging] = useState(false)
+
+  const [pending, setPending] = useState<PickedPose | null>(null)
+  const { data: locations = [] } = useQuery({ queryKey: ['locations'], queryFn: api.locations.list })
+  const liveRobots = useLiveStore((st) => st.robots)
+  const anyLocalized = Object.values(liveRobots).some((r) => r.localized)
+  const robotsOnline = Object.values(liveRobots).filter((r) => r.status && r.status !== 'offline').length
 
   const { data: mapData, isLoading } = useQuery({
     queryKey: ['map', 'current'],
@@ -122,10 +130,10 @@ export function WarehouseMapPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
-    if (!label) return
+    if (!label || !pgmData) return
     uploadMutation.mutate({
       label,
-      pgm_data: pgmData || 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+      pgm_data: pgmData,
       resolution: parseFloat(resolution) || 0.05,
       origin_x: parseFloat(originX) || 0.0,
       origin_y: parseFloat(originY) || 0.0,
@@ -153,28 +161,21 @@ export function WarehouseMapPage() {
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
               <Map className="h-4 w-4 text-cyan" />
-              Active Map Canvas: {mapData?.label || 'Primary Warehouse SLAM Grid'}
+              Active map: {mapData?.label || 'none yet'}
             </h3>
             {mapData && (
               <span className="text-xs font-mono text-cyan flex items-center gap-1">
-                <CheckCircle2 className="h-3.5 w-3.5 text-success" /> Active Synced
+                <CheckCircle2 className="h-3.5 w-3.5 text-success" /> Live
               </span>
             )}
           </div>
 
-          <div className="h-96 bg-[#020617] rounded-xl border border-border-primary flex items-center justify-center p-2 relative overflow-hidden grid-bg">
-            <canvas
-              ref={(canvas) => {
-                if (canvas) {
-                  canvas.width = canvas.parentElement?.clientWidth || 800
-                  canvas.height = canvas.parentElement?.clientHeight || 400
-                  const ctx = canvas.getContext('2d')
-                  if (ctx) drawMapToCanvas(ctx, canvas.width, canvas.height, mapData)
-                }
-              }}
-              className="w-full h-full object-contain rounded-lg"
-            />
+          <div className="bg-[#020617] rounded-xl border border-border-primary p-2 relative overflow-hidden">
+            <LiveMap mapData={mapData} locations={locations} onPick={setPending} pending={pending} height={520} />
           </div>
+          <p className="text-[11px] text-text-secondary">
+            Live robots are drawn on the map in real time. Press and drag anywhere on the map to pick a position and heading, then name it in the panel.
+          </p>
         </Card>
 
         <Card className="space-y-4">
@@ -195,15 +196,21 @@ export function WarehouseMapPage() {
             </div>
 
             <div className="p-3 rounded-lg bg-bg-secondary border border-border-primary space-y-1">
-              <span className="text-text-secondary text-[10px] uppercase font-mono block">Zones Synchronization</span>
-              <span className="font-mono text-success">Auto-Synced from SLAM</span>
+              <span className="text-text-secondary text-[10px] uppercase font-mono block">Robot link</span>
+              <span className={`font-mono ${robotsOnline ? 'text-success' : 'text-text-secondary'}`}>
+                {robotsOnline ? `${robotsOnline} robot(s) online${anyLocalized ? ', localized on this map' : ', not localized yet'}` : 'No robot connected'}
+              </span>
             </div>
 
             <div className="p-3 rounded-lg bg-bg-secondary border border-border-primary space-y-1">
-              <span className="text-text-secondary text-[10px] uppercase font-mono block">Robot Path Constraints</span>
-              <span className="font-mono text-text-primary">No-Go Zones Configured</span>
+              <span className="text-text-secondary text-[10px] uppercase font-mono block">Taught locations</span>
+              <span className="font-mono text-text-primary">{locations.length} on this map</span>
             </div>
           </div>
+        </Card>
+
+        <Card className="lg:col-span-3">
+          <LocationsPanel locations={locations} pending={pending} onClear={() => setPending(null)} />
         </Card>
       </div>
 

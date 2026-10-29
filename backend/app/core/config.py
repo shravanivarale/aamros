@@ -36,6 +36,24 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = 60 * 24
     refresh_token_expire_days: int = 14
 
+    # ROS 2 robot bridge (armsbot_nav wms_bridge) and the real-time sync with it
+    ros_bridge_url: str = "http://10.113.140.148:8005"   # seeds the first bridge endpoint; more are managed in the dashboard
+    ros_sync_enabled: bool = True
+    ros_sync_interval: float = 0.5         # seconds between robot telemetry polls (position/status go to the WebSocket every poll)
+    ros_event_interval: float = 1.0        # seconds between robot event polls
+    ros_dispatch_interval: float = 2.0     # seconds between attempts to hand queued order/shipment tasks to the robot
+
+    # First account and demo data. Production creates NO demo accounts; set ADMIN_EMAIL / ADMIN_PASSWORD for the first admin.
+    seed_demo_data: Optional[bool] = None            # None = on in development, off otherwise
+    admin_email: Optional[str] = None
+    admin_password: Optional[str] = None
+    admin_name: str = "Administrator"
+    # Shared secret the backend sends to robot bridges that have an api_token (set the same value as the default for new bridges)
+    ros_bridge_token: Optional[str] = None
+    # auto | disable | require | verify-full. auto: no TLS on localhost and Railway's private network, 'require' (encrypted, certificate
+    # not verified, like libpq sslmode=require) on Railway's public proxy, verified TLS for other remote databases (Supabase...)
+    database_ssl: str = "auto"
+
     environment: str = "development"
     cors_origins: str = "http://localhost:5174,http://localhost:5173,http://localhost:3000,*"
 
@@ -94,6 +112,27 @@ class Settings(BaseSettings):
     @property
     def is_development(self) -> bool:
         return self.environment == "development"
+
+    @property
+    def is_production(self) -> bool:
+        return self.environment == "production"
+
+    @property
+    def seed_demo(self) -> bool:
+        return self.is_development if self.seed_demo_data is None else self.seed_demo_data
+
+    def check_production(self) -> list[str]:
+        """Things that must not reach a public deployment. Returns the problems (empty = fine)."""
+        problems = []
+        if self.secret_key.startswith("robu-production-secure-jwt-secret") or len(self.secret_key) < 32:
+            problems.append("SECRET_KEY is the built-in default or shorter than 32 characters (anyone could forge logins). "
+                            "Generate one: python -c \"import secrets; print(secrets.token_hex(32))\"")
+        if self.effective_database_url.startswith("sqlite"):
+            problems.append("DATABASE_URL is not set, so the app would use a local SQLite file that is erased on every deploy. "
+                            "Add a PostgreSQL database and set DATABASE_URL.")
+        if self.seed_demo:
+            problems.append("SEED_DEMO_DATA is on: demo accounts with published passwords would be created.")
+        return problems
 
 
 @lru_cache

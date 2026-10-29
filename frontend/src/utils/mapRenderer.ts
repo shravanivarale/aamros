@@ -13,6 +13,31 @@ export interface MapData {
   height_px?: number
 }
 
+/** Where the map sits on the canvas: converts ROS map-frame metres <-> canvas pixels (image row 0 is the top = largest y). */
+export interface MapView {
+  toCanvas: (wx: number, wy: number) => [number, number]
+  toWorld: (px: number, py: number) => [number, number]
+  pxPerMetre: number
+}
+
+const FIT = 0.95
+
+export function computeMapView(cw: number, ch: number, imgW: number, imgH: number, m: MapData): MapView {
+  const s = Math.min(cw / imgW, ch / imgH) * FIT
+  const w = imgW * s
+  const h = imgH * s
+  const x0 = (cw - w) / 2
+  const y0 = (ch - h) / 2
+  const res = m.resolution || 0.05
+  const ox = m.origin_x ?? 0
+  const oy = m.origin_y ?? 0
+  return {
+    pxPerMetre: s / res,
+    toCanvas: (wx, wy) => [x0 + ((wx - ox) / res) * s, y0 + (imgH - (wy - oy) / res) * s],
+    toWorld: (px, py) => [ox + ((px - x0) / s) * res, oy + (imgH - (py - y0) / s) * res],
+  }
+}
+
 // In-memory image element cache to avoid recreating Image objects on every animation frame
 const imageCache = new Map<string, HTMLImageElement>()
 
@@ -21,7 +46,7 @@ export function drawMapToCanvas(
   canvasWidth: number,
   canvasHeight: number,
   mapData?: MapData | null
-) {
+): MapView | null {
   // Clear canvas
   ctx.clearRect(0, 0, canvasWidth, canvasHeight)
 
@@ -46,8 +71,8 @@ export function drawMapToCanvas(
   }
 
   if (!mapData || !mapData.pgm_data) {
-    drawProceduralSlamGrid(ctx, canvasWidth, canvasHeight, mapData)
-    return
+    drawNoMap(ctx, canvasWidth, canvasHeight)
+    return null
   }
 
   const dataStr = mapData.pgm_data.trim()
@@ -64,39 +89,34 @@ export function drawMapToCanvas(
     }
 
     if (cachedImg.complete && cachedImg.naturalWidth > 0) {
-      // Scale to fit canvas maintaining aspect ratio
-      const scale = Math.min(canvasWidth / cachedImg.naturalWidth, canvasHeight / cachedImg.naturalHeight) * 0.9
-      const w = cachedImg.naturalWidth * scale
-      const h = cachedImg.naturalHeight * scale
-      const x = (canvasWidth - w) / 2
-      const y = (canvasHeight - h) / 2
-
-      ctx.save()
-      ctx.shadowColor = 'rgba(6, 182, 212, 0.4)'
-      ctx.shadowBlur = 15
-      ctx.drawImage(cachedImg, x, y, w, h)
-      ctx.restore()
-
-      // Draw SLAM origin marker (0,0)
-      drawOriginMarker(ctx, x + w / 2, y + h / 2, mapData)
-    } else {
-      // Image is still loading
-      ctx.fillStyle = '#0ea5e9'
-      ctx.font = '12px monospace'
-      ctx.textAlign = 'center'
-      ctx.fillText(`Loading map texture... (${mapData.label || 'Occupancy Grid'})`, canvasWidth / 2, canvasHeight / 2)
+      const view = computeMapView(canvasWidth, canvasHeight, cachedImg.naturalWidth, cachedImg.naturalHeight, mapData)
+      const [x0, y0] = view.toCanvas(
+        (mapData.origin_x ?? 0),
+        (mapData.origin_y ?? 0) + cachedImg.naturalHeight * (mapData.resolution || 0.05)
+      )
+      const [x1, y1] = view.toCanvas(
+        (mapData.origin_x ?? 0) + cachedImg.naturalWidth * (mapData.resolution || 0.05),
+        (mapData.origin_y ?? 0)
+      )
+      ctx.imageSmoothingEnabled = false
+      ctx.drawImage(cachedImg, x0, y0, x1 - x0, y1 - y0)
+      drawOriginMarker(ctx, ...view.toCanvas(0, 0), mapData)
+      return view
     }
-    return
+    ctx.fillStyle = '#0ea5e9'
+    ctx.font = '12px monospace'
+    ctx.textAlign = 'center'
+    ctx.fillText(`Loading map... (${mapData.label || 'Occupancy Grid'})`, canvasWidth / 2, canvasHeight / 2)
+    return null
   }
 
   // 3. PGM Netpbm Format Parsing (P2 ASCII or P5 Binary)
   if (dataStr.startsWith('P2') || dataStr.startsWith('P5')) {
-    renderPgmData(ctx, canvasWidth, canvasHeight, dataStr, mapData)
-    return
+    return renderPgmData(ctx, canvasWidth, canvasHeight, dataStr, mapData)
   }
 
-  // Fallback to procedural visualization if format is unhandled text
-  drawProceduralSlamGrid(ctx, canvasWidth, canvasHeight, mapData)
+  drawNoMap(ctx, canvasWidth, canvasHeight, 'Map format not recognised')
+  return null
 }
 
 function renderPgmData(
@@ -105,7 +125,7 @@ function renderPgmData(
   canvasHeight: number,
   pgmStr: string,
   mapData: MapData
-) {
+): MapView | null {
   try {
     const tokens = pgmStr.split(/\s+/).filter(t => t.length > 0 && !t.startsWith('#'))
     if (tokens.length < 4) throw new Error('Invalid PGM header')
@@ -115,8 +135,8 @@ function renderPgmData(
     const pixelTokens = tokens.slice(4)
 
     if (isNaN(width) || isNaN(height) || width <= 0 || height <= 0) {
-      drawProceduralSlamGrid(ctx, canvasWidth, canvasHeight, mapData)
-      return
+      drawNoMap(ctx, canvasWidth, canvasHeight, 'Invalid PGM header')
+      return null
     }
 
     // Create offscreen canvas for rendering PGM raw pixels
@@ -154,114 +174,28 @@ function renderPgmData(
 
     offCtx.putImageData(imgData, 0, 0)
 
-    // Render offscreen PGM canvas scaled onto main canvas
-    const scale = Math.min(canvasWidth / width, canvasHeight / height) * 0.9
-    const w = width * scale
-    const h = height * scale
-    const x = (canvasWidth - w) / 2
-    const y = (canvasHeight - h) / 2
-
-    ctx.drawImage(offscreen, x, y, w, h)
-    drawOriginMarker(ctx, x + w / 2, y + h / 2, mapData)
+    const view = computeMapView(canvasWidth, canvasHeight, width, height, mapData)
+    const [x0, y0] = view.toCanvas(mapData.origin_x ?? 0, (mapData.origin_y ?? 0) + height * (mapData.resolution || 0.05))
+    const [x1, y1] = view.toCanvas((mapData.origin_x ?? 0) + width * (mapData.resolution || 0.05), mapData.origin_y ?? 0)
+    ctx.imageSmoothingEnabled = false
+    ctx.drawImage(offscreen, x0, y0, x1 - x0, y1 - y0)
+    drawOriginMarker(ctx, ...view.toCanvas(0, 0), mapData)
+    return view
   } catch {
-    drawProceduralSlamGrid(ctx, canvasWidth, canvasHeight, mapData)
+    drawNoMap(ctx, canvasWidth, canvasHeight, 'Could not render the map')
+    return null
   }
 }
 
-function drawProceduralSlamGrid(
-  ctx: CanvasRenderingContext2D,
-  canvasWidth: number,
-  canvasHeight: number,
-  mapData?: MapData | null
-) {
-  const cx = canvasWidth / 2
-  const cy = canvasHeight / 2
-
-  // Outer Warehouse Perimeter Wall
-  ctx.strokeStyle = '#0ea5e9'
-  ctx.lineWidth = 2
-  ctx.setLineDash([8, 4])
-  ctx.strokeRect(cx - 220, cy - 140, 440, 280)
-  ctx.setLineDash([])
-
-  // Warehouse Racks Blueprint Layout (6 Structural Racks detected from SLAM Map)
-  ctx.fillStyle = 'rgba(14, 165, 233, 0.15)'
-  ctx.strokeStyle = '#0ea5e9'
-  ctx.lineWidth = 1.5
-
-  const rackCols = [-140, 0, 140] // 3 columns x 2 rows = 6 Racks
-  rackCols.forEach((rx, index) => {
-    // Top Row Racks (RACK-01, RACK-02, RACK-03)
-    ctx.fillRect(cx + rx - 25, cy - 110, 50, 85)
-    ctx.strokeRect(cx + rx - 25, cy - 110, 50, 85)
-
-    // Bottom Row Racks (RACK-04, RACK-05, RACK-06)
-    ctx.fillRect(cx + rx - 25, cy + 25, 50, 85)
-    ctx.strokeRect(cx + rx - 25, cy + 25, 50, 85)
-
-    // Label rack names on canvas
-    ctx.fillStyle = '#38bdf8'
-    ctx.font = 'Bold 11px monospace'
-    ctx.textAlign = 'center'
-    ctx.fillText(`RACK-0${index + 1}`, cx + rx, cy - 65)
-    ctx.fillText(`RACK-0${index + 4}`, cx + rx, cy + 70)
-    ctx.fillStyle = 'rgba(14, 165, 233, 0.15)'
-  })
-
-  // Origin Crosshair (0,0)
-  drawOriginMarker(ctx, cx, cy, mapData)
-}
-
-/**
- * Real-time Map Rack Analyzer
- * Detects structural rack count and position coordinates from active SLAM map
- */
-export function detectRacksFromMap(mapData?: MapData | null) {
-  if (!mapData) {
-    return {
-      count: 6,
-      racks: [
-        { code: 'RACK-01', zone: 'Golden Fast-Picking', levels: 4, slots: 16, occupiedSlots: 0 },
-        { code: 'RACK-02', zone: 'Golden Fast-Picking', levels: 4, slots: 16, occupiedSlots: 0 },
-        { code: 'RACK-03', zone: 'Golden Fast-Picking', levels: 4, slots: 16, occupiedSlots: 0 },
-        { code: 'RACK-04', zone: 'Cold Storage B', levels: 3, slots: 12, occupiedSlots: 0 },
-        { code: 'RACK-05', zone: 'Reserve Bulk C', levels: 5, slots: 20, occupiedSlots: 0 },
-        { code: 'RACK-06', zone: 'Reserve Bulk C', levels: 4, slots: 16, occupiedSlots: 0 },
-      ]
-    }
-  }
-
-  // Calculate real structural racks from SLAM map dimensions & data
-  const width = mapData.width_px || 800
-  const height = mapData.height_px || 600
-  const area = width * height
-  
-  // Real-time dynamic count (e.g. 6 racks for standard 800x600 SLAM PGM map)
-  const count = Math.max(6, Math.min(12, Math.floor(area / 80000)))
-
-  const defaultZones = ['Golden Fast-Picking', 'Cold Storage B', 'Reserve Bulk C']
-  const generatedRacks = Array.from({ length: count }, (_, i) => {
-    const rackId = i + 1
-    const code = `RACK-${rackId < 10 ? '0' + rackId : rackId}`
-    const zone = defaultZones[i % defaultZones.length]
-    const levels = 4 // Default initial shelves count
-    const slotsPerLevel = 4
-    const slots = levels * slotsPerLevel
-    const occupiedSlots = 0 // Starts empty by default until items are assigned
-
-    return {
-      code,
-      zone,
-      levels,
-      slots,
-      occupiedSlots,
-    }
-  })
-
-  return {
-    count,
-    racks: generatedRacks
-  }
+function drawNoMap(ctx: CanvasRenderingContext2D, w: number, h: number, msg = 'No map received from the robot yet') {
+  ctx.save()
+  ctx.fillStyle = '#64748b'
+  ctx.font = '13px monospace'
+  ctx.textAlign = 'center'
+  ctx.fillText(msg, w / 2, h / 2 - 8)
+  ctx.font = '11px monospace'
+  ctx.fillText('Start the robot bridge (wms.launch.py) and the map syncs automatically, or upload one.', w / 2, h / 2 + 12)
+  ctx.restore()
 }
 
 function drawOriginMarker(
@@ -287,7 +221,7 @@ function drawOriginMarker(
   ctx.fillStyle = '#0ea5e9'
   ctx.font = '10px monospace'
   ctx.textAlign = 'left'
-  const originStr = `(0,0) ${mapData?.label || 'SLAM Origin'}`
+  const originStr = `(0,0) ${mapData?.label || 'map origin'}`
   ctx.fillText(originStr, x + 8, y - 8)
   ctx.restore()
 }

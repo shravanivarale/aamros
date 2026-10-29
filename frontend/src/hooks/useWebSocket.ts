@@ -1,107 +1,47 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useCallback } from 'react'
 import type { WebSocketMessage } from '../types'
+import { send, subscribe } from '../lib/liveSocket'
+import { useLiveStore } from '../stores/liveStore'
 
 interface WebSocketOptions {
   onMessage?: (msg: WebSocketMessage) => void
   onRobotPosition?: (data: any) => void
   onRobotStatus?: (data: any) => void
+  onRobotEvent?: (data: any) => void
+  onTaskUpdate?: (data: any) => void
   onInventoryUpdate?: (data: any) => void
   onOrderUpdate?: (data: any) => void
   onShipmentUpdate?: (data: any) => void
+  onMapUpdate?: (data: any) => void
+  onLocationsUpdate?: (data: any) => void
 }
 
+/** Subscribe to the shared live socket. Same API as before; `isConnected` reflects the one shared connection. */
 export function useWebSocket(options: WebSocketOptions = {}) {
-  const [isConnected, setIsConnected] = useState(false)
-  const wsRef = useRef<WebSocket | null>(null)
+  const isConnected = useLiveStore((s) => s.connected)
   const optionsRef = useRef(options)
-  const isComponentMounted = useRef(true)
-  const reconnectTimeout = useRef<number | null>(null)
-
-  // Keep options ref up to date
   useEffect(() => {
     optionsRef.current = options
   }, [options])
 
-  const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
-
-    const token = localStorage.getItem('access_token') || ''
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.hostname}:8000/ws${token ? `?token=${encodeURIComponent(token)}` : ''}`
-    const ws = new WebSocket(wsUrl)
-
-    ws.onopen = () => {
-      setIsConnected(true)
-      // If we need to register this connection for a specific robot later:
-      // ws.send(JSON.stringify({ type: 'register_robot', data: { robot_id: ... } }))
-    }
-    
-    ws.onerror = () => {
-      // Gracefully handle connection attempts without unhandled browser noise
-    }
-
-    ws.onclose = () => {
-      // A superseded socket (e.g. closed by StrictMode's remount) must not clobber the live one.
-      if (wsRef.current !== ws) return
-      setIsConnected(false)
-      wsRef.current = null
-      if (isComponentMounted.current) {
-        if (reconnectTimeout.current) window.clearTimeout(reconnectTimeout.current)
-        reconnectTimeout.current = window.setTimeout(connect, 3000)
-      }
-    }
-    
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as WebSocketMessage
-        const opts = optionsRef.current
-        
-        opts.onMessage?.(msg)
-        
-        switch (msg.type) {
-          case 'robot_position':
-            opts.onRobotPosition?.(msg.data)
-            break
-          case 'robot_status':
-            opts.onRobotStatus?.(msg.data)
-            break
-          case 'inventory_update':
-            opts.onInventoryUpdate?.(msg.data)
-            break
-          case 'order_update':
-            opts.onOrderUpdate?.(msg.data)
-            break
-          case 'shipment_update':
-            opts.onShipmentUpdate?.(msg.data)
-            break
-        }
-      } catch {
-        // ignore malformed messages
-      }
-    }
-
-    wsRef.current = ws
-  }, [])
-
   useEffect(() => {
-    isComponentMounted.current = true
-    connect()
-    
-    return () => {
-      isComponentMounted.current = false
-      if (reconnectTimeout.current) window.clearTimeout(reconnectTimeout.current)
-      const ws = wsRef.current
-      wsRef.current = null
-      ws?.close()
-    }
-  }, [connect])
-
-  const sendCommand = useCallback((type: string, data: Record<string, unknown>) => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ type, data }))
-    }
+    return subscribe((msg) => {
+      const o = optionsRef.current
+      o.onMessage?.(msg)
+      switch (msg.type) {
+        case 'robot_position': o.onRobotPosition?.(msg.data); break
+        case 'robot_status': o.onRobotStatus?.(msg.data); break
+        case 'robot_event': o.onRobotEvent?.(msg.data); break
+        case 'task_update': o.onTaskUpdate?.(msg.data); break
+        case 'inventory_update': o.onInventoryUpdate?.(msg.data); break
+        case 'order_update': o.onOrderUpdate?.(msg.data); break
+        case 'shipment_update': o.onShipmentUpdate?.(msg.data); break
+        case 'map_update': o.onMapUpdate?.(msg.data); break
+        case 'locations_update': o.onLocationsUpdate?.(msg.data); break
+      }
+    })
   }, [])
 
+  const sendCommand = useCallback((type: string, data: Record<string, unknown>) => send(type, data), [])
   return { isConnected, sendCommand }
 }
-

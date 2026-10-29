@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends
 from app.core.deps import require_roles
 from app.core.enums import UserRole
 
-from app.api.v1 import admin, assistant, auth, customer, warehouse, robots, map, slotting, robot_communication
+from app.api.v1 import admin, assistant, auth, customer, warehouse, robots, map, slotting, robot_communication, locations, bridges
 
 api_router = APIRouter()
 api_router.include_router(auth.router)
@@ -22,4 +22,6 @@ api_router.include_router(
     dependencies=[Depends(require_roles(UserRole.ADMINISTRATOR, UserRole.WAREHOUSE_OPERATOR))],
 )
 api_router.include_router(robot_communication.router)
+api_router.include_router(locations.router)
+api_router.include_router(bridges.router)
 

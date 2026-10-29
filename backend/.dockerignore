@@ -1,0 +1,12 @@
+# never ship local databases, secrets or caches inside the image
+*.db
+*.sqlite*
+.env
+.env.*
+!.env.example
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+scripts/supabase_demo.sql

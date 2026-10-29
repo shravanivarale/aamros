@@ -45,18 +45,22 @@ class OrderService:
         self.db.add(order)
         await self.db.flush()
 
-        task = RobotTask(
-            task_type=TaskType.RETRIEVE_PRODUCT.value,
-            status=TaskStatus.QUEUED.value,
-            priority=3,
-            reference_type="order",
-            reference_id=order.id,
-            payload=json.dumps({"order_number": order.order_number}),
-        )
-        self.db.add(task)
+        tasks = [
+            RobotTask(
+                task_type=TaskType.RETRIEVE_PRODUCT.value,
+                status=TaskStatus.QUEUED.value,
+                priority=3,
+                reference_type="order",
+                reference_id=order.id,
+                product_id=item.product_id,
+                payload=json.dumps({"order_number": order.order_number, "quantity": item.quantity}),
+            )
+            for item in order_items
+        ]
+        self.db.add_all(tasks)
         await self.db.flush()
 
-        order.task_id = task.id
+        order.task_id = tasks[0].id if tasks else None
         order.status = OrderStatus.PROCESSING.value
         await self.db.flush()
 

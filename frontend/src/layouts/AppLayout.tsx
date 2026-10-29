@@ -1,3 +1,4 @@
+import { useLiveSync } from '../hooks/useLiveSync'
 import { useEffect, useState } from 'react'
 import { Outlet, useLocation } from 'react-router-dom'
 import { GlobalSidebar } from '../components/navigation/GlobalSidebar'
@@ -8,6 +9,7 @@ import { ToastViewport } from '../components/ui'
 const DESKTOP_QUERY = '(min-width: 1024px)'
 
 export function AppLayout() {
+  useLiveSync() // WebSocket messages keep every page's data fresh without polling
   // Desktop: collapse to icon rail. Mobile: slide-in drawer.
   const [collapsed, setCollapsed] = useState(false)
   const [drawerOpen, setDrawerOpen] = useState(false)

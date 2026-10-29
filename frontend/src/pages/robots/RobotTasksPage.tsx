@@ -7,30 +7,35 @@ import { Card, StatusBadge, DataTable, type Column, Button, Modal, Input, Select
 export function RobotTasksPage() {
   const queryClient = useQueryClient()
   const [isModalOpen, setIsModalOpen] = useState(false)
-  const [sourceLoc, setSourceLoc] = useState('RACK-1')
-  const [destLoc, setDestLoc] = useState('SHIP-11')
+  const [sourceLoc, setSourceLoc] = useState('')
+  const [destLoc, setDestLoc] = useState('')
   const [taskType, setTaskType] = useState('PICK_AND_PLACE')
   const [priority, setPriority] = useState('10')
+
+  // Locations taught on the real map: a task can only go where the robot knows how to get to
+  const { data: locations = [] } = useQuery({ queryKey: ['locations'], queryFn: api.locations.list })
+  const locOptions = [{ value: '', label: locations.length ? 'Select a location…' : 'No locations taught yet (Warehouse Map → Locations)' },
+    ...locations.map((l) => ({ value: l.code, label: `${l.code} · ${l.kind}${l.issue ? ' (robot rejected it)' : ''}` }))]
 
   // Fetch ROS Bridge Health
   const { data: healthData } = useQuery({
     queryKey: ['robot-communication-health'],
     queryFn: api.robotCommunication.health,
-    refetchInterval: 3000,
+    refetchInterval: 15000, // live updates arrive over the WebSocket (useLiveSync); this is only a safety net
   })
 
   // Fetch Live Events Log from ROS Bridge
   const { data: eventsData = [] } = useQuery({
     queryKey: ['robot-communication-events'],
     queryFn: api.robotCommunication.listEvents,
-    refetchInterval: 2000,
+    refetchInterval: 15000,
   })
 
   // Fetch Robots List
   const { data: robotsData = [] } = useQuery({
     queryKey: ['robot-communication-robots'],
     queryFn: api.robotCommunication.listRobots,
-    refetchInterval: 3000,
+    refetchInterval: 15000,
   })
 
   // Submit Mission Mutation
@@ -158,7 +163,7 @@ export function RobotTasksPage() {
           </div>
           <div>
             <p className="text-[10px] uppercase font-mono text-text-secondary">Active AMRs</p>
-            <p className="text-lg font-bold text-text-primary font-mono">{robotsData.length || 1} Robot(s)</p>
+            <p className="text-lg font-bold text-text-primary font-mono">{robotsData.length} Robot(s)</p>
           </div>
         </Card>
 
@@ -200,20 +205,8 @@ export function RobotTasksPage() {
           />
 
           <div className="grid grid-cols-2 gap-4">
-            <Input
-              label="Source Rack / Slot"
-              value={sourceLoc}
-              onChange={(val) => setSourceLoc(val)}
-              placeholder="e.g. RACK-1"
-              required
-            />
-            <Input
-              label="Destination Rack / Slot"
-              value={destLoc}
-              onChange={(val) => setDestLoc(val)}
-              placeholder="e.g. SHIP-11"
-              required
-            />
+            <Select label="Source location" value={sourceLoc} onChange={setSourceLoc} options={locOptions} />
+            <Select label="Destination location" value={destLoc} onChange={setDestLoc} options={locOptions} />
           </div>
 
           <Input
@@ -223,12 +216,15 @@ export function RobotTasksPage() {
             onChange={(val) => setPriority(val)}
             required
           />
+          {submitMutation.isError && (
+            <p role="alert" className="text-xs text-error font-mono">{(submitMutation.error as Error).message}</p>
+          )}
 
           <div className="flex justify-end gap-3 pt-4">
             <Button type="button" variant="outline" onClick={() => setIsModalOpen(false)}>
               Cancel
             </Button>
-            <Button type="submit" disabled={submitMutation.isPending}>
+            <Button type="submit" disabled={submitMutation.isPending || !sourceLoc || !destLoc}>
               {submitMutation.isPending ? 'Publishing to ROS...' : 'Publish Mission Envelope'}
             </Button>
           </div>

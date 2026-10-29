@@ -4,6 +4,7 @@ import { Bot, Package, ShoppingCart, Layers, Activity, Sparkles, ArrowRight } fr
 import { api } from '../../api/client'
 import { useAuthStore } from '../../stores/authStore'
 import { useWebSocket } from '../../hooks/useWebSocket'
+import { batteryLabel } from '../../utils/format'
 import { MetricCard, Skeleton, StatusBadge, DataTable, Card, PageHeader, ErrorState, Notice, type Column } from '../../components/ui'
 import type { Robot } from '../../types'
 import { AssistantPanel } from './AssistantPanel'
@@ -41,7 +42,7 @@ export function DashboardPage() {
       header: 'Battery',
       sortable: true,
       sortValue: (row) => Number(row.battery_level),
-      cell: (row) => <span className="t-numeric text-xs text-text-primary">{Number(row.battery_level).toFixed(0)}%</span>,
+      cell: (row) => <span className="t-numeric text-xs text-text-primary">{batteryLabel(Number(row.battery_level))}</span>,
     },
     { header: 'Status', cell: (row) => <StatusBadge status={row.status} /> },
   ]

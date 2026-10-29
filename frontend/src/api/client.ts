@@ -1,4 +1,7 @@
-const API_BASE = '/api/v1'
+// Same-origin '/api/v1' in development (Vite proxy). For a separately hosted backend (Railway) set VITE_API_BASE_URL at build time,
+// e.g. https://your-backend.up.railway.app
+export const BACKEND_ORIGIN: string = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.replace(/\/+$/, '') ?? ''
+const API_BASE = `${BACKEND_ORIGIN}/api/v1`
 
 class ApiError extends Error {
   status: number
@@ -233,7 +236,30 @@ export const api = {
     stats: () => request<{ total_users: number; total_products: number; total_orders: number; total_shipments: number; total_robots: number; active_robots: number }>('/admin/stats'),
     settings: () => request<{ app_name: string; app_version: string; environment: string; database_provider: string; supabase_configured: boolean; firebase_auth_enabled: boolean }>('/admin/settings'),
   },
+  bridges: {
+    list: () => request<import('../types').BridgeEndpoint[]>('/bridges'),
+    create: (data: { name: string; host: string; port: number; scheme?: string; token?: string; enabled?: boolean }) =>
+      request<import('../types').BridgeEndpoint>('/bridges', { method: 'POST', body: JSON.stringify(data) }),
+    update: (id: string, data: Partial<{ name: string; host: string; port: number; scheme: string; token: string; enabled: boolean }>) =>
+      request<import('../types').BridgeEndpoint>(`/bridges/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (id: string) => request<{ status: string; message: string }>(`/bridges/${id}`, { method: 'DELETE' }),
+    test: (host: string, port: number, scheme = 'http', token?: string) =>
+      request<import('../types').BridgeProbe>('/bridges/test', { method: 'POST', body: JSON.stringify({ host, port, scheme, token: token || undefined }) }),
+  },
+  locations: {
+    list: () => request<import('../types').MapLocation[]>('/locations'),
+    create: (data: { code: string; kind: string; x: number; y: number; yaw: number; label?: string }) =>
+      request<import('../types').MapLocation>('/locations', { method: 'POST', body: JSON.stringify(data) }),
+    update: (code: string, data: Partial<{ kind: string; x: number; y: number; yaw: number; label: string }>) =>
+      request<import('../types').MapLocation>(`/locations/${encodeURIComponent(code)}`, { method: 'PUT', body: JSON.stringify(data) }),
+    remove: (code: string) => request<{ status: string }>(`/locations/${encodeURIComponent(code)}`, { method: 'DELETE' }),
+  },
   robotCommunication: {
+    state: () => request<{ bridge_online: boolean; bridge_error?: string | null; health: Record<string, unknown>; robots: Record<string, unknown>[] }>('/robot-communication/state'),
+    initialPose: (x: number, y: number, yaw_deg: number) =>
+      request('/robot-communication/initial-pose', { method: 'POST', body: JSON.stringify({ x, y, yaw_deg }) }),
+    videoUrl: (robotId?: string) =>
+      `${API_BASE}/robot-communication/video_feed?token=${encodeURIComponent(localStorage.getItem('access_token') || '')}${robotId ? `&robot_id=${encodeURIComponent(robotId)}` : ''}`,
     submitTask: (data: { task_type?: string; source_location_id: string; destination_location_id: string; priority?: number; robot_id?: string }) =>
       request<{ status: string; task_id: string; message_id: string }>('/robot-communication/tasks', {
         method: 'POST',
@@ -243,9 +269,9 @@ export const api = {
     cancelTask: (taskId: string) => request(`/robot-communication/tasks/${taskId}/cancel`, { method: 'POST' }),
     pauseTask: (taskId: string) => request(`/robot-communication/tasks/${taskId}/pause`, { method: 'POST' }),
     resumeTask: (taskId: string) => request(`/robot-communication/tasks/${taskId}/resume`, { method: 'POST' }),
-    listRobots: () => request<{ robot_id: string; status: string; battery: number; position: { x: number; y: number; yaw: number }; current_task_id?: string; last_seen?: string }[]>('/robot-communication/robots'),
+    listRobots: () => request<{ robot_id: string; db_id?: string; status: string; battery: number | null; position: { x: number; y: number; yaw: number } | null; current_task_id?: string | null; last_seen?: string | null; localized?: boolean; estop?: boolean; allow_motion?: boolean }[]>('/robot-communication/robots'),
     listEvents: () => request<{ message_id: string; message_type: string; timestamp: string; task_id?: string; payload?: Record<string, unknown> }[]>('/robot-communication/events'),
-    health: () => request<{ status: string; ros_initialized: boolean; active_robots: number; pending_tasks: number; node_name: string }>('/robot-communication/health'),
+    health: () => request<{ status: string; ros_initialized: boolean; active_robots: number; pending_tasks: number; node_name: string; allow_motion?: boolean; localized?: boolean; bridge_url?: string; error?: string | null }>('/robot-communication/health'),
   },
 }
 

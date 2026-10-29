@@ -46,7 +46,7 @@ export function ReportsPage() {
       records: robots.data?.length ?? null,
       loading: robots.isLoading,
       error: robots.isError,
-      build: () => (robots.data ?? []).map((r) => ({ name: r.name, model: r.model, serial_number: r.serial_number, status: r.status, battery_level: r.battery_level, enabled: r.is_enabled })),
+      build: () => (robots.data ?? []).map((r) => ({ name: r.name, model: r.model, serial_number: r.serial_number, status: r.status, battery_level: r.battery_level < 0 ? null : r.battery_level, enabled: r.is_enabled })),
     },
     {
       key: 'shipments',

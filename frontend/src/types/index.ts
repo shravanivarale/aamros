@@ -87,6 +87,48 @@ export interface Robot {
   created_at: string
 }
 
+export interface BridgeEndpoint {
+  id: string
+  name: string
+  host: string
+  port: number
+  scheme: 'http' | 'https'
+  has_token: boolean
+  enabled: boolean
+  url: string
+  state: 'online' | 'offline' | 'connecting' | 'disabled'
+  error?: string | null
+  robots: { robot_id: string; db_id?: string; status: string; localized?: boolean }[]
+  allow_motion?: boolean | null
+  map_id?: string | null
+}
+
+export interface BridgeProbe {
+  reachable: boolean
+  error?: string | null
+  allow_motion?: boolean | null
+  localized?: boolean | null
+  map_id?: string | null
+  robots?: { robot_id: string; status: string; localized?: boolean }[]
+}
+
+export type LocationKind = 'home' | 'receiving' | 'shipping' | 'charging' | 'rack_slot' | 'waypoint'
+
+/** A named point taught on the robot's real map (metres / radians in the map frame). `issue` = why the robot refused it. */
+export interface MapLocation {
+  id: string
+  code: string
+  kind: LocationKind
+  x: number
+  y: number
+  yaw: number
+  label?: string | null
+  rack_id?: string | null
+  rack_slot_id?: string | null
+  map_label?: string | null
+  issue?: string | null
+}
+
 export interface RobotOdom {
   robot_id: string
   x: number

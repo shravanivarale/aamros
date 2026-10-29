@@ -1,8 +1,9 @@
-import { Server, User, Database, Shield } from 'lucide-react'
+import { User, Database, Shield } from 'lucide-react'
 import { useQuery } from '@tanstack/react-query'
 import { api } from '../../api/client'
 import { useAuthStore } from '../../stores/authStore'
 import { Card, PageHeader } from '../../components/ui'
+import { BridgesPanel } from '../../components/settings/BridgesPanel'
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
@@ -15,7 +16,6 @@ function Row({ label, value }: { label: string; value: string }) {
 
 export function SettingsPage() {
   const user = useAuthStore((s) => s.user)
-  const health = useQuery({ queryKey: ['robot-comm-health'], queryFn: api.robotCommunication.health, retry: false })
   const settings = useQuery({ queryKey: ['admin-settings'], queryFn: api.admin.settings, retry: false })
 
   return (
@@ -47,17 +47,7 @@ export function SettingsPage() {
           </dl>
         </Card>
 
-        <Card>
-          <h2 className="t-section-title mb-4 flex items-center gap-2">
-            <Server className="h-4 w-4 text-action-primary" aria-hidden="true" /> Robot Communication Bridge
-          </h2>
-          <dl className="space-y-3 text-sm">
-            <Row label="Bridge Status" value={health.isLoading ? 'Checking…' : health.isError ? 'Simulated / Standby' : health.data?.status ?? 'Online'} />
-            <Row label="ROS 2 Initialized" value={health.data ? String(health.data.ros_initialized) : 'True (Virtual Bridge)'} />
-            <Row label="Active Robots" value={health.data ? String(health.data.active_robots) : '1'} />
-            <Row label="Pending Tasks" value={health.data ? String(health.data.pending_tasks) : '0'} />
-          </dl>
-        </Card>
+        <BridgesPanel />
 
         <Card>
           <h2 className="t-section-title mb-4 flex items-center gap-2">

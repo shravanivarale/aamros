@@ -19,7 +19,7 @@ class Robot(Base, UUIDPrimaryKeyMixin, TimestampMixin, SoftDeleteMixin):
     serial_number: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     ip_address: Mapped[Optional[str]] = mapped_column(String(50), default="192.168.1.12", nullable=True)
     status: Mapped[str] = mapped_column(String(50), default=RobotStatus.OFFLINE.value, nullable=False)
-    battery_level: Mapped[float] = mapped_column(Float, default=100.0, nullable=False)
+    battery_level: Mapped[float] = mapped_column(Float, default=-1.0, nullable=False)   # percent; -1 = not measured by this robot
     current_task_id: Mapped[Optional[str]] = mapped_column(String(36), nullable=True)
     position_x: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     position_y: Mapped[Optional[float]] = mapped_column(Float, nullable=True)

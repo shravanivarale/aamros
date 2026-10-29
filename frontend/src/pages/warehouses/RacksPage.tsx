@@ -4,7 +4,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Edit3, Trash2, Zap, Boxes, ExternalLink, RefreshCw, Map, Layers, CheckCircle2 } from 'lucide-react'
 import { api } from '../../api/client'
 import { Card, DataTable, type Column, Button, Modal, Input, Select } from '../../components/ui'
-import { detectRacksFromMap } from '../../utils/mapRenderer'
 
 interface RackItem extends Record<string, unknown> {
   id: string
@@ -32,14 +31,8 @@ export function RacksPage() {
   const [maxWeight, setMaxWeight] = useState('500 kg')
   const [status, setStatus] = useState('operational')
 
-  // Fetch active SLAM map data to automatically identify real-time rack count & structure
-  const { data: mapData } = useQuery({
-    queryKey: ['map', 'current'],
-    queryFn: api.map.getCurrent
-  })
-
-  // Detect real-time racks from active map (e.g. 6 detected racks for uploaded PGM map)
-  const mapAnalysis = detectRacksFromMap(mapData)
+  // Racks are the rack slots taught on the real map (Warehouse Map -> Locations); nothing is invented from the map image
+  const { data: locations = [] } = useQuery({ queryKey: ['locations'], queryFn: api.locations.list })
 
   const { data: recommendations } = useQuery({
     queryKey: ['slotting-recommendations'],
@@ -53,26 +46,26 @@ export function RacksPage() {
     },
   })
 
-  // Dynamic racks state initialized from map analysis (6 detected racks)
   const [racks, setRacks] = useState<RackItem[]>([])
 
   useEffect(() => {
-    if (mapAnalysis && mapAnalysis.racks) {
-      const liveRacks: RackItem[] = mapAnalysis.racks.map((r, i) => ({
-        id: `r-${i + 1}`,
-        code: r.code,
-        zone: r.zone,
-        levels: r.levels,
-        slots: r.slots,
-        occupiedSlots: 0,
-        slotScore: 850,
-        assignedSkus: 'Unassigned',
-        maxWeight: '500 kg',
-        status: 'operational'
-      }))
-      setRacks(liveRacks)
-    }
-  }, [mapData])
+    setRacks(
+      locations
+        .filter((l) => l.kind === 'rack_slot')
+        .map((l) => ({
+          id: l.id,
+          code: l.code,
+          zone: l.label || l.map_label || 'taught on map',
+          levels: 1,
+          slots: 1,
+          occupiedSlots: 0,
+          slotScore: 0,
+          assignedSkus: '—',
+          maxWeight: '—',
+          status: l.issue ? 'rejected by robot' : 'operational',
+        })),
+    )
+  }, [locations])
 
   const resetForm = () => {
     setCode('')
@@ -271,13 +264,13 @@ export function RacksPage() {
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h3 className="text-xs font-bold text-text-primary font-mono">REAL-TIME SLAM MAP ADAPTABILITY ACTIVE</h3>
+              <h3 className="text-xs font-bold text-text-primary font-mono">RACK SLOTS TAUGHT ON THE ROBOT'S MAP</h3>
               <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-success/10 text-success border border-success/30 flex items-center gap-1">
-                <CheckCircle2 className="h-3 w-3" /> Auto-Synced from {mapData?.label || 'Uploaded SLAM PGM Map'}
+                <CheckCircle2 className="h-3 w-3" /> {racks.length} taught location{racks.length === 1 ? '' : 's'}
               </span>
             </div>
             <p className="text-[11px] text-text-secondary mt-0.5">
-              Detected <strong>{mapAnalysis.count} Racks</strong> from SLAM map contour analysis. Edit shelves count and rack names below in real-time!
+              Each row is a <strong>rack_slot</strong> location taught on the Warehouse Map: the places the robot can navigate to. Add or move them there.
             </p>
           </div>
         </div>
@@ -317,8 +310,8 @@ export function RacksPage() {
       <Modal isOpen={isCreateOpen} onClose={() => { setIsCreateOpen(false); resetForm(); }} title="Configure Rack & Shelves">
         <form onSubmit={handleCreate} className="space-y-4">
           <div className="p-3 rounded-lg bg-bg-secondary border border-cyan/30 text-xs flex items-center justify-between">
-            <span className="text-text-secondary font-mono">Real-time SLAM Map Count:</span>
-            <span className="font-mono text-cyan font-bold">{mapAnalysis.count} Racks Detected</span>
+            <span className="text-text-secondary font-mono">Rack slots taught on the map:</span>
+            <span className="font-mono text-cyan font-bold">{racks.length}</span>
           </div>
 
           <Input

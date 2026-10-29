@@ -1,3 +1,4 @@
+import json
 import uuid
 from typing import Optional
 
@@ -36,17 +37,23 @@ class ShipmentService:
         self.db.add(shipment)
         await self.db.flush()
 
-        task = RobotTask(
-            task_type=TaskType.STORE_CRATE.value,
-            status=TaskStatus.QUEUED.value,
-            priority=4,
-            reference_type="shipment",
-            reference_id=shipment.id,
-        )
-        self.db.add(task)
+        tasks = [
+            RobotTask(
+                task_type=TaskType.STORE_CRATE.value,
+                status=TaskStatus.QUEUED.value,
+                priority=4,
+                reference_type="shipment",
+                reference_id=shipment.id,
+                product_id=item.product_id,
+                payload=json.dumps({"shipment_number": shipment.shipment_number, "quantity": item.expected_quantity,
+                                    "crate_label": item.crate_label, "aruco_marker_id": item.aruco_marker_id}),
+            )
+            for item in items
+        ]
+        self.db.add_all(tasks)
         await self.db.flush()
 
-        shipment.task_id = task.id
+        shipment.task_id = tasks[0].id if tasks else None
         shipment.status = ShipmentStatus.PROCESSING.value
         await self.db.flush()
 

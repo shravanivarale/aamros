@@ -38,9 +38,10 @@ class RobotService:
         self.db.add(robot)
         health = RobotHealth(robot=robot, connectivity="offline")
         self.db.add(health)
-        
+
         await self.db.flush()
-        
+        return RobotResponse.model_validate(robot)
+
     async def update_robot(self, robot_id: str, data: "RobotUpdate") -> Optional[RobotResponse]:
         result = await self.db.execute(select(Robot).where(Robot.id == robot_id, Robot.deleted_at.is_(None)))
         robot = result.scalar_one_or_none()
@@ -99,10 +100,15 @@ class RobotService:
             }
         )
 
-    async def send_command(self, robot_id: str, command: str, payload: dict):
-        logger_msg = f"Sending command {command} to robot {robot_id} with payload {payload}"
-        logger.info(logger_msg)
-        
-        sent = await manager.send_to_robot(robot_id, "robot_command", {"command": command, "payload": payload})
-        if not sent:
-            logger.warning("Robot %s not connected; command dropped", robot_id)
+    async def send_command(self, robot_id: str, command: str, payload: dict) -> dict:
+        """Forward a high-level command (emergency_stop, clear_estop, cancel_task, go_to, dock, manual_velocity) to the robot bridge."""
+        from app.services.bridge_client import pool
+        from app.services.live_state import live
+
+        robot = live.find_robot(robot_id)
+        if robot is None:
+            raise ValueError("Robot is offline or unknown to the bridge")
+        logger.info("Command %s -> robot %s %s", command, robot["robot_id"], payload if command != "manual_velocity" else "")
+        result = await pool.for_robot(robot).command(robot["robot_id"], command, payload)
+        await manager.broadcast("robot_command", {"robot_id": robot_id, "command": command, "result": result})
+        return result

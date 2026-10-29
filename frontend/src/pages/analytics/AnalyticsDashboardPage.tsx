@@ -1,3 +1,4 @@
+import { hasBattery } from '../../utils/format'
 import { useQuery } from '@tanstack/react-query'
 import { BarChart3, Battery, DollarSign, ShoppingCart } from 'lucide-react'
 import { api } from '../../api/client'
@@ -35,7 +36,8 @@ export function AnalyticsDashboardPage() {
   const orderList = orders.data ?? []
   const robotList = robots.data ?? []
   const totalValue = orderList.reduce((sum, o) => sum + Number(o.total_amount || 0), 0)
-  const avgBattery = robotList.length ? robotList.reduce((s, r) => s + Number(r.battery_level || 0), 0) / robotList.length : null
+  const measured = robotList.filter((r) => hasBattery(Number(r.battery_level)))   // only robots that actually report a battery
+  const avgBattery = measured.length ? measured.reduce((s, r) => s + Number(r.battery_level), 0) / measured.length : null
 
   const byStatus = new Map<string, number>()
   for (const o of orderList) byStatus.set(o.status, (byStatus.get(o.status) ?? 0) + 1)
@@ -61,7 +63,11 @@ export function AnalyticsDashboardPage() {
           {robotList.length === 0 ? (
             <EmptyState title="No robots" description={robots.isError ? 'Robot data could not be loaded.' : 'Register robots to see battery levels.'} />
           ) : (
-            <BarList items={robotList.map((r) => ({ label: r.name, value: Math.round(Number(r.battery_level || 0)) }))} unit="%" />
+            measured.length ? (
+            <BarList items={measured.map((r) => ({ label: r.name, value: Math.round(Number(r.battery_level)) }))} unit="%" />
+          ) : (
+            <EmptyState title="Battery not measured" description="This robot has no battery sensor connected, so no level is shown." />
+          )
           )}
         </Card>
       </div>

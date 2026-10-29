@@ -4,8 +4,11 @@ import { Bot, Camera, Video, Radio, Edit3, Trash2, Globe } from 'lucide-react'
 import { api } from '../../api/client'
 import { Card, StatusBadge, LoadingSpinner, EmptyState, Button, Modal, Input, IconButton } from '../../components/ui'
 import type { Robot } from '../../types'
+import { useLiveStore } from '../../stores/liveStore'
+import { batteryLabel } from '../../utils/format'
 
 export function RobotsPage() {
+  const liveRobots = useLiveStore((st) => st.robots)
   const queryClient = useQueryClient()
   
   // Modals state
@@ -92,7 +95,7 @@ export function RobotsPage() {
   if (isLoading) return <LoadingSpinner />
 
   const activeRobot = robots && robots.length > 0 ? robots[0] : null
-  const currentIp = activeRobot?.ip_address || '192.168.1.12'
+  const currentIp = activeRobot?.ip_address || 'robot'
 
   return (
     <div className="space-y-6">
@@ -134,7 +137,7 @@ export function RobotsPage() {
         <div className="relative aspect-video max-h-[380px] w-full overflow-hidden neu-inset flex items-center justify-center">
           {isCameraActive && !streamFailed && (
             <img
-              src="/api/v1/robot-communication/video_feed"
+              src={api.robotCommunication.videoUrl(activeRobot?.id)}
               alt="AMR live camera stream"
               className="h-full w-full object-contain"
               onError={() => setStreamFailed(true)}
@@ -157,7 +160,9 @@ export function RobotsPage() {
         <EmptyState title="No Robots in Fleet" description="Register robots to begin autonomous operations." />
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {robots.map((robot) => (
+          {robots.map((robot) => {
+            const lv = liveRobots[robot.id]
+            return (
             <Card key={robot.id} className="space-y-4 relative group">
               <div className="flex items-start justify-between">
                 <div className="flex items-center gap-3">
@@ -170,7 +175,7 @@ export function RobotsPage() {
                   </div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <StatusBadge status={robot.status} />
+                  <StatusBadge status={lv?.status ?? robot.status} />
                   <div className="flex items-center gap-1">
                     <IconButton label={`Edit ${robot.name}`} className="h-9 w-9" onClick={() => openEditModal(robot)}>
                       <Edit3 className="h-4 w-4" />
@@ -186,13 +191,13 @@ export function RobotsPage() {
                 <span className="text-text-secondary flex items-center gap-1">
                   <Globe className="h-3.5 w-3.5 text-cyan" /> Robot IP:
                 </span>
-                <span className="font-bold text-cyan">{robot.ip_address || '192.168.1.12'}</span>
+                <span className="font-bold text-cyan">{robot.ip_address || 'unknown'}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div className="p-2.5 rounded-lg bg-bg-secondary border border-border-primary">
                   <span className="text-text-secondary block text-[10px] uppercase font-mono">Battery</span>
-                  <span className="font-semibold text-text-primary font-mono">{robot.battery_level.toFixed(1)}%</span>
+                  <span className="font-semibold text-text-primary font-mono">{batteryLabel(lv?.battery_known === false ? -1 : lv?.battery_level ?? robot.battery_level, 1)}</span>
                 </div>
                 <div className="p-2.5 rounded-lg bg-bg-secondary border border-border-primary">
                   <span className="text-text-secondary block text-[10px] uppercase font-mono">Enabled</span>
@@ -202,16 +207,21 @@ export function RobotsPage() {
                 </div>
               </div>
 
-              {robot.position_x != null && (
+              {(lv?.x ?? robot.position_x) != null && (
                 <div className="p-2.5 rounded-lg bg-bg-secondary border border-border-primary text-xs font-mono">
-                  <span className="text-text-secondary block text-[10px] uppercase">Live Position (SLAM)</span>
+                  <span className="text-text-secondary block text-[10px] uppercase">
+                    Live position on map {lv ? (lv.localized ? '· localized' : '· NOT localized') : '· last known'}
+                  </span>
                   <span className="text-cyan">
-                    X: {robot.position_x.toFixed(2)} | Y: {robot.position_y?.toFixed(2)} | θ: {robot.orientation_z?.toFixed(2)}
+                    X: {(lv?.x ?? robot.position_x)!.toFixed(2)} | Y: {(lv?.y ?? robot.position_y)?.toFixed(2)} | θ:{' '}
+                    {lv?.yaw != null ? `${((lv.yaw * 180) / Math.PI).toFixed(0)}°` : '—'}
+                    {lv?.linear_velocity != null && ` | v: ${lv.linear_velocity.toFixed(2)} m/s`}
                   </span>
                 </div>
               )}
             </Card>
-          ))}
+            )
+          })}
         </div>
       )}
 

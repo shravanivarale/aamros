@@ -139,7 +139,7 @@ async def get_admin_stats(
     robots_res = await db.execute(select(Robot))
     robots = robots_res.scalars().all()
 
-    active_cnt = sum(1 for r in robots if r.status in ["busy", "working", "moving", "picking"])
+    active_cnt = sum(1 for r in robots if r.status in ["busy", "working", "moving", "picking", "navigating"])
 
     return AdminStatsResponse(
         total_users=users_cnt,

@@ -9,6 +9,7 @@ from app.core.enums import UserRole
 from app.db.session import get_db
 from app.models.user import User
 from app.schemas.robot import RobotCreate, RobotHealthResponse, RobotResponse, RobotUpdate
+from app.services.bridge_client import BridgeOffline
 from app.services.robot_service import RobotService
 
 router = APIRouter(prefix="/robots", tags=["Robotics Operations"])
@@ -108,5 +109,9 @@ async def send_command(
     _: Annotated[User, Depends(require_roles(UserRole.ADMINISTRATOR, UserRole.WAREHOUSE_OPERATOR))],
 ):
     service = RobotService(db)
-    await service.send_command(robot_id, data.command, data.payload)
-    return {"status": "command_sent"}
+    try:
+        return {"status": "command_sent", "result": await service.send_command(robot_id, data.command, data.payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
+    except BridgeOffline as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=f"Robot bridge unreachable ({exc})")
