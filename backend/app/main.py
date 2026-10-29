@@ -94,6 +94,7 @@ def create_app() -> FastAPI:
         return {"status": "healthy", "version": settings.app_version}
 
     @app.get("/health/db")
+    @app.get(f"{settings.api_v1_prefix}/health/db")      # Vercel only forwards /api/*, /health and /ws to the backend
     async def health_db():
         """Can this server reach its database? Reports the kind of database, which setting supplied it and the error TYPE if it
         cannot be reached (never the address, the password or the message text), so a misconfiguration is diagnosable without logs."""
