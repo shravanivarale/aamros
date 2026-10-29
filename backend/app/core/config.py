@@ -59,10 +59,11 @@ class Settings(BaseSettings):
 
     @property
     def effective_database_url(self) -> str:
-        # Check explicit environment variables in priority order
+        # DATABASE_URL is the canonical deployment setting. Keep the Supabase
+        # names as fallbacks for existing local environments.
         raw_url = (
-            os.environ.get("SUPABASE_DATABASE_URL")
-            or os.environ.get("DATABASE_URL")
+            os.environ.get("DATABASE_URL")
+            or os.environ.get("SUPABASE_DATABASE_URL")
             or os.environ.get("POSTGRES_URL")
             or self.supabase_database_url
             or self.database_url
