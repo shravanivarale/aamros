@@ -124,6 +124,18 @@ export function LiveMap({ mapData, locations = [], onPick, pending, className = 
   )
 }
 
+/** Light text with a dark outline: readable on both the white floor and the dark background of the map. */
+function haloText(ctx: CanvasRenderingContext2D, text: string, x: number, y: number) {
+  ctx.save()
+  ctx.lineJoin = 'round'
+  ctx.lineWidth = 4
+  ctx.strokeStyle = 'rgba(2,6,23,0.95)'
+  ctx.strokeText(text, x, y)
+  ctx.fillStyle = '#f8fafc'
+  ctx.fillText(text, x, y)
+  ctx.restore()
+}
+
 function drawPose(ctx: CanvasRenderingContext2D, view: MapView, p: PickedPose, color: string, len = 0.5) {
   const [cx, cy] = view.toCanvas(p.x, p.y)
   const L = len * view.pxPerMetre
@@ -160,8 +172,7 @@ function drawLocation(ctx: CanvasRenderingContext2D, view: MapView, l: MapLocati
   ctx.globalAlpha = 1
   ctx.font = 'bold 11px monospace'
   ctx.textAlign = 'left'
-  ctx.fillStyle = '#e2e8f0'
-  ctx.fillText(l.code + (l.issue ? ' ⚠' : ''), cx + 9, cy - 8)
+  haloText(ctx, l.code + (l.issue ? ' ⚠' : ''), cx + 9, cy - 8)
   ctx.restore()
 }
 
@@ -213,9 +224,8 @@ function drawRobot(ctx: CanvasRenderingContext2D, view: MapView, r: ReturnType<t
   ctx.closePath()
   ctx.fill()
   ctx.rotate(r.yaw)
-  ctx.fillStyle = '#f8fafc'
-  ctx.font = '12px monospace'
+  ctx.font = 'bold 12px monospace'
   ctx.textAlign = 'center'
-  ctx.fillText(`${name}${r.localized ? '' : ' (not localized)'}`, 0, -0.4 * k - 4)
+  haloText(ctx, `${name}${r.localized ? '' : ' (not localized)'}`, 0, -0.4 * k - 4)
   ctx.restore()
 }
