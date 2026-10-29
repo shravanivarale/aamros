@@ -53,7 +53,10 @@ class RobotSync:
     # ── lifecycle ────────────────────────────────────────────────────────────
     async def start(self):
         if self._task is None and get_settings().ros_sync_enabled:
-            await self._seed_first_endpoint()
+            try:
+                await self._seed_first_endpoint()
+            except Exception as exc:                            # noqa: BLE001  (database unreachable: keep the API up, retry in the loop)
+                logger.error("Could not read/seed the robot bridge list at start-up (%s); the sync loop will keep retrying", type(exc).__name__)
             self._task = asyncio.create_task(self._loop(), name="robot-sync")
             logger.info("Robot sync started")
 
